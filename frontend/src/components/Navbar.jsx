@@ -34,22 +34,18 @@ function Navbar({ setMobileOpen }) {
   }, []);
 
   const openNotification = async (notification) => {
-    try {
-      if (!notification.read_at) {
+    if (!notification.read_at) {
+      try {
         await api.put(`/notifications/${notification.id}/read`);
-        setNotifications((current) =>
-          current.map((item) =>
-            item.id === notification.id
-              ? { ...item, read_at: new Date().toISOString() }
-              : item
-          )
-        );
         setUnreadCount((count) => Math.max(0, count - 1));
+      } catch (error) {
+        console.error("Unable to mark notification as read", error);
       }
-    } catch (error) {
-      console.error("Unable to mark notification as read", error);
     }
 
+    setNotifications((current) =>
+      current.filter((item) => item.id !== notification.id)
+    );
     setNotificationsOpen(false);
     setProfileMenuOpen(false);
     navigate(notification.link);
