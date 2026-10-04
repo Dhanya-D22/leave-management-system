@@ -67,7 +67,9 @@ async function seed() {
         leave_type_id,
         total_days,
         used_days,
-        remaining_days
+        remaining_days,
+        period_year,
+        period_month
       )
 
       SELECT
@@ -75,7 +77,10 @@ async function seed() {
         lt.id,
         lt.total_days,
         0,
-        lt.total_days
+        lt.total_days,
+        EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER,
+        CASE WHEN lt.reset_period = 'MONTHLY'
+          THEN EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER ELSE NULL END
 
       FROM users u
 
@@ -84,9 +89,7 @@ async function seed() {
       WHERE u.email = 'employee@example.com'
       AND lt.is_active = TRUE
 
-      ON CONFLICT
-      (employee_id, leave_type_id)
-      DO NOTHING
+      ON CONFLICT DO NOTHING
       `
     );
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../../services/api";
 import Loading from "../../components/Loading";
 
-const emptyForm = { name: "", total_days: "", description: "" };
+const emptyForm = { name: "", total_days: "", reset_period: "YEARLY", description: "" };
 
 function LeaveTypes() {
   const [leaveTypes, setLeaveTypes] = useState([]);
@@ -43,6 +43,7 @@ function LeaveTypes() {
     setForm({
       name: leaveType.name,
       total_days: String(leaveType.total_days),
+      reset_period: leaveType.reset_period || "YEARLY",
       description: leaveType.description || "",
     });
     setShowForm(true);
@@ -102,7 +103,7 @@ function LeaveTypes() {
       <div className="page-header">
         <div>
           <h2>Leave Types</h2>
-          <p>Set the leave options and annual days available to employees.</p>
+          <p>Configure leave options and the days available in each reset period.</p>
         </div>
         <button
           type="button"
@@ -139,7 +140,7 @@ function LeaveTypes() {
               />
             </div>
             <div className="form-group">
-              <label htmlFor="leave-type-days">Annual allowed days</label>
+              <label htmlFor="leave-type-days">Allowed days per period</label>
               <input
                 id="leave-type-days"
                 type="number"
@@ -161,6 +162,17 @@ function LeaveTypes() {
                 placeholder="Optional details"
               />
             </div>
+            <div className="form-group">
+              <label htmlFor="leave-type-reset">Reset period</label>
+              <select
+                id="leave-type-reset"
+                value={form.reset_period}
+                onChange={(event) => setForm({ ...form, reset_period: event.target.value })}
+              >
+                <option value="YEARLY">Yearly</option>
+                <option value="MONTHLY">Monthly</option>
+              </select>
+            </div>
           </div>
           <div className="leave-type-form-actions">
             <button type="button" className="secondary-button" onClick={closeForm}>
@@ -179,7 +191,8 @@ function LeaveTypes() {
             <thead>
               <tr>
                 <th>Leave Type</th>
-                <th>Annual Days</th>
+                <th>Allowed Days</th>
+                <th>Reset</th>
                 <th>Description</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -187,11 +200,12 @@ function LeaveTypes() {
             </thead>
             <tbody>
               {leaveTypes.length === 0 ? (
-                <tr><td colSpan="5"><div className="empty-state">No leave types configured.</div></td></tr>
+                <tr><td colSpan="6"><div className="empty-state">No leave types configured.</div></td></tr>
               ) : leaveTypes.map((leaveType) => (
                 <tr key={leaveType.id}>
                   <td><strong>{leaveType.name}</strong></td>
                   <td>{leaveType.total_days} days</td>
+                  <td>{leaveType.reset_period === "MONTHLY" ? "Monthly" : "Yearly"}</td>
                   <td>{leaveType.description || "—"}</td>
                   <td>
                     <span className={`leave-type-status ${leaveType.is_active ? "is-active" : "is-inactive"}`}>

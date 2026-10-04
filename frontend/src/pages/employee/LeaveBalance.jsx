@@ -4,6 +4,7 @@ import Loading from "../../components/Loading";
 
 function LeaveBalance() {
   const [balances, setBalances] = useState([]);
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,6 +16,7 @@ function LeaveBalance() {
       const response = await api.get("/leaves/balance");
 
       setBalances(response.data.balances || []);
+      setHistory(response.data.history || []);
     } catch (error) {
       console.error(error);
     } finally {
@@ -48,6 +50,13 @@ function LeaveBalance() {
 
           const usedPercentage =
             total > 0 ? (used / total) * 100 : 0;
+          const periodLabel = balance.period_month
+            ? new Date(
+                Number(balance.period_year),
+                Number(balance.period_month) - 1,
+                1
+              ).toLocaleDateString(undefined, { month: "long", year: "numeric" })
+            : `${balance.period_year} yearly balance`;
 
           return (
             <div className="leave-balance-card" key={balance.id}>
@@ -58,7 +67,7 @@ function LeaveBalance() {
               <h3>{balance.name}</h3>
 
               <p className="balance-description">
-                Leave allocation for this year
+                {periodLabel} · resets {balance.reset_period === "MONTHLY" ? "monthly" : "yearly"}
               </p>
 
               <div className="large-balance">
@@ -89,6 +98,51 @@ function LeaveBalance() {
           );
         })}
       </div>
+
+      {history.length > 0 && (
+        <div className="content-card balance-history-card">
+          <div className="card-header">
+            <div>
+              <h3>Previous Periods</h3>
+              <p>Completed monthly and yearly balances are kept here.</p>
+            </div>
+          </div>
+          <div className="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Period</th>
+                  <th>Leave Type</th>
+                  <th>Allocated</th>
+                  <th>Used</th>
+                  <th>Remaining</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((balance) => {
+                  const period = balance.period_month
+                    ? new Date(
+                        Number(balance.period_year),
+                        Number(balance.period_month) - 1,
+                        1
+                      ).toLocaleDateString(undefined, { month: "long", year: "numeric" })
+                    : `${balance.period_year}`;
+
+                  return (
+                    <tr key={balance.id}>
+                      <td>{period}</td>
+                      <td>{balance.name}</td>
+                      <td>{balance.total_days}</td>
+                      <td>{balance.used_days}</td>
+                      <td>{balance.remaining_days}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

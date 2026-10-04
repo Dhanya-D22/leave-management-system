@@ -13,10 +13,16 @@ function validateLeaveType(name, totalDays) {
   return null;
 }
 
+function validateResetPeriod(resetPeriod) {
+  return resetPeriod === "YEARLY" || resetPeriod === "MONTHLY"
+    ? null
+    : "Choose a yearly or monthly reset period.";
+}
+
 async function getAdminLeaveTypes(req, res) {
   try {
     const result = await pool.query(`
-      SELECT id, name, total_days, description, is_active
+      SELECT id, name, total_days, description, reset_period, is_active
       FROM leave_types
       ORDER BY id
     `);
@@ -28,8 +34,8 @@ async function getAdminLeaveTypes(req, res) {
 }
 
 async function createLeaveType(req, res) {
-  const { name, total_days, description = "" } = req.body;
-  const validationError = validateLeaveType(name, total_days);
+  const { name, total_days, description = "", reset_period = "YEARLY" } = req.body;
+  const validationError = validateLeaveType(name, total_days) || validateResetPeriod(reset_period);
   if (validationError) {
     return res.status(400).json({ message: validationError });
   }
@@ -39,24 +45,33 @@ async function createLeaveType(req, res) {
     await client.query("BEGIN");
     const created = await client.query(
       `
-      INSERT INTO leave_types (name, total_days, description)
-      VALUES ($1, $2, $3)
-      RETURNING id, name, total_days, description, is_active
+      INSERT INTO leave_types (name, total_days, description, reset_period)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, name, total_days, description, reset_period, is_active
       `,
-      [name.trim(), Number(total_days), String(description).trim()]
+      [name.trim(), Number(total_days), String(description).trim(), reset_period]
     );
     const leaveType = created.rows[0];
 
     await client.query(
       `
       INSERT INTO leave_balances
-        (employee_id, leave_type_id, total_days, used_days, remaining_days)
-      SELECT id, $1, $2, 0, $2
-      FROM users
-      WHERE role = 'EMPLOYEE'
-      ON CONFLICT (employee_id, leave_type_id) DO NOTHING
+        (employee_id, leave_type_id, total_days, used_days, remaining_days, period_year, period_month)
+      SELECT
+        u.id,
+        lt.id,
+        lt.total_days,
+        0,
+        lt.total_days,
+        EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER,
+        CASE WHEN lt.reset_period = 'MONTHLY'
+          THEN EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER ELSE NULL END
+      FROM users u
+      CROSS JOIN leave_types lt
+      WHERE u.role = 'EMPLOYEE' AND lt.id = $1
+      ON CONFLICT DO NOTHING
       `,
-      [leaveType.id, leaveType.total_days]
+      [leaveType.id]
     );
 
     await client.query("COMMIT");
@@ -74,8 +89,8 @@ async function createLeaveType(req, res) {
 }
 
 async function updateLeaveType(req, res) {
-  const { name, total_days, description = "" } = req.body;
-  const validationError = validateLeaveType(name, total_days);
+  const { name, total_days, description = "", reset_period = "YEARLY" } = req.body;
+  const validationError = validateLeaveType(name, total_days) || validateResetPeriod(reset_period);
   if (validationError) {
     return res.status(400).json({ message: validationError });
   }
@@ -86,11 +101,11 @@ async function updateLeaveType(req, res) {
     const updated = await client.query(
       `
       UPDATE leave_types
-      SET name = $1, total_days = $2, description = $3
-      WHERE id = $4
-      RETURNING id, name, total_days, description, is_active
+      SET name = $1, total_days = $2, description = $3, reset_period = $4
+      WHERE id = $5
+      RETURNING id, name, total_days, description, reset_period, is_active
       `,
-      [name.trim(), Number(total_days), String(description).trim(), req.params.id]
+      [name.trim(), Number(total_days), String(description).trim(), reset_period, req.params.id]
     );
 
     if (updated.rowCount === 0) {
@@ -102,15 +117,37 @@ async function updateLeaveType(req, res) {
     await client.query(
       `
       INSERT INTO leave_balances
-        (employee_id, leave_type_id, total_days, used_days, remaining_days)
-      SELECT id, $1, $2, 0, $2
-      FROM users
-      WHERE role = 'EMPLOYEE'
-      ON CONFLICT (employee_id, leave_type_id) DO UPDATE
-      SET total_days = EXCLUDED.total_days,
-          remaining_days = GREATEST(EXCLUDED.total_days - leave_balances.used_days, 0)
+        (employee_id, leave_type_id, total_days, used_days, remaining_days, period_year, period_month)
+      SELECT
+        u.id,
+        lt.id,
+        lt.total_days,
+        0,
+        lt.total_days,
+        EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER,
+        CASE WHEN lt.reset_period = 'MONTHLY'
+          THEN EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER ELSE NULL END
+      FROM users u
+      CROSS JOIN leave_types lt
+      WHERE u.role = 'EMPLOYEE' AND lt.id = $1
+      ON CONFLICT DO NOTHING
       `,
-      [leaveType.id, leaveType.total_days]
+      [leaveType.id]
+    );
+
+    await client.query(
+      `
+      UPDATE leave_balances lb
+      SET total_days = $2,
+          remaining_days = GREATEST($2 - lb.used_days, 0)
+      WHERE lb.leave_type_id = $1
+        AND lb.period_year = EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER
+        AND lb.period_month IS NOT DISTINCT FROM CASE
+          WHEN $3 = 'MONTHLY' THEN EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER
+          ELSE NULL
+        END
+      `,
+      [leaveType.id, leaveType.total_days, leaveType.reset_period]
     );
 
     await client.query("COMMIT");
@@ -139,7 +176,7 @@ async function setLeaveTypeActive(req, res) {
       UPDATE leave_types
       SET is_active = $1
       WHERE id = $2
-      RETURNING id, name, total_days, description, is_active
+      RETURNING id, name, total_days, description, reset_period, is_active
       `,
       [is_active, req.params.id]
     );

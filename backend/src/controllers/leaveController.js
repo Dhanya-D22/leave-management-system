@@ -1,4 +1,9 @@
 const pool = require("../config/database");
+const {
+  ensureCurrentEmployeeBalances,
+  ensureEmployeeBalanceForPeriod,
+  allocateDaysByPeriod,
+} = require("../services/leaveBalanceService");
 
 function calculateDays(startDate, endDate) {
   if (
@@ -12,6 +17,14 @@ function calculateDays(startDate, endDate) {
 
   const start = Date.parse(`${startDate}T00:00:00Z`);
   const end = Date.parse(`${endDate}T00:00:00Z`);
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(end) ||
+    new Date(start).toISOString().slice(0, 10) !== startDate ||
+    new Date(end).toISOString().slice(0, 10) !== endDate
+  ) {
+    return NaN;
+  }
   return Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
 }
 
@@ -19,31 +32,68 @@ function calculateDays(startDate, endDate) {
 // Get leave types
 async function getLeaveTypes(req, res) {
   try {
+    await ensureCurrentEmployeeBalances(pool, req.user.id);
     const result = await pool.query(`
       SELECT
         lt.id,
         lt.name,
         lt.total_days,
         lt.description,
-        GREATEST(
-          COALESCE(lb.remaining_days, lt.total_days) - COALESCE((
-            SELECT SUM(lr.number_of_days)
-            FROM leave_requests lr
-            WHERE lr.employee_id = $1
-              AND lr.leave_type_id = lt.id
-              AND lr.status = 'PENDING'
-          ), 0),
-          0
-        ) AS remaining_days
+        lt.reset_period
       FROM leave_types lt
-      LEFT JOIN leave_balances lb
-        ON lb.leave_type_id = lt.id
-        AND lb.employee_id = $1
       WHERE lt.is_active = TRUE
       ORDER BY lt.id
-    `, [req.user.id]);
+    `);
 
-    res.json({ leaveTypes: result.rows });
+    const leaveTypes = [];
+    for (const type of result.rows) {
+      const periods = req.query.start_date && req.query.end_date
+        ? allocateDaysByPeriod(req.query.start_date, req.query.end_date, type.reset_period)
+        : null;
+
+      if (periods) {
+        let remainingDays = 0;
+        for (const period of periods) {
+          const balance = await ensureEmployeeBalanceForPeriod(pool, {
+            employeeId: req.user.id,
+            leaveTypeId: type.id,
+            totalDays: type.total_days,
+            year: period.year,
+            month: period.month,
+          });
+          remainingDays += Number(balance?.remaining_days || 0);
+        }
+        leaveTypes.push({
+          ...type,
+          remaining_days: remainingDays,
+          balance_period_label: "selected period(s)",
+        });
+      } else {
+        const balance = await pool.query(
+          `
+          SELECT remaining_days,
+                 CASE WHEN period_month IS NULL THEN period_year::TEXT
+                   ELSE period_year::TEXT || '-' || LPAD(period_month::TEXT, 2, '0')
+                 END AS balance_period_label
+          FROM leave_balances
+          WHERE employee_id = $1 AND leave_type_id = $2
+            AND period_year = EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER
+            AND period_month IS NOT DISTINCT FROM CASE
+              WHEN $3 = 'MONTHLY' THEN EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER
+              ELSE NULL
+            END
+          `,
+          [req.user.id, type.id, type.reset_period]
+        );
+        leaveTypes.push({
+          ...type,
+          remaining_days: Number(balance.rows[0]?.remaining_days || 0),
+          balance_period_label: balance.rows[0]?.balance_period_label || "current period",
+        });
+      }
+    }
+
+    res.json({ leaveTypes });
   } catch (error) {
     console.error(error);
 
@@ -56,6 +106,9 @@ async function getLeaveTypes(req, res) {
 
 // Apply leave
 async function applyLeave(req, res) {
+  const client = await pool.connect();
+  let transactionStarted = false;
+
   try {
     const {
       leave_type_id,
@@ -86,43 +139,64 @@ async function applyLeave(req, res) {
       });
     }
 
-    // Check balance
-    const balance = await pool.query(
+    await client.query("BEGIN");
+    transactionStarted = true;
+
+    const typeResult = await client.query(
       `
-      SELECT
-        lb.remaining_days - COALESCE(SUM(lr.number_of_days), 0) AS available_days
-      FROM leave_types lt
-      JOIN leave_balances lb
-        ON lb.leave_type_id = lt.id
-        AND lb.employee_id = $1
-      LEFT JOIN leave_requests lr
-        ON lr.employee_id = lb.employee_id
-        AND lr.leave_type_id = lb.leave_type_id
-        AND lr.status = 'PENDING'
-      WHERE lt.id = $2 AND lt.is_active = TRUE
-      GROUP BY lb.remaining_days
+      SELECT id, name, total_days, reset_period
+      FROM leave_types
+      WHERE id = $1 AND is_active = TRUE
+      FOR SHARE
       `,
-      [req.user.id, leave_type_id]
+      [leave_type_id]
     );
 
-    if (!balance.rows[0]) {
+    if (!typeResult.rows[0]) {
+      await client.query("ROLLBACK");
+      transactionStarted = false;
       return res.status(400).json({
-        message: "This leave type is unavailable or has no balance configured.",
+        message: "This leave type is unavailable.",
       });
     }
 
-    if (
-      Number(balance.rows[0].available_days) <
-      numberOfDays
-    ) {
-      return res.status(400).json({
-        message: `Insufficient leave balance. You have ${Math.max(0, Number(balance.rows[0].available_days))} day(s) available, including pending requests.`,
-      });
+    const leaveType = typeResult.rows[0];
+    const allocations = allocateDaysByPeriod(start_date, end_date, leaveType.reset_period);
+    if (!allocations || allocations.reduce((sum, row) => sum + row.numberOfDays, 0) !== numberOfDays) {
+      await client.query("ROLLBACK");
+      transactionStarted = false;
+      return res.status(400).json({ message: "Invalid dates" });
     }
 
-    const result = await pool.query(
+    const balances = [];
+    for (const allocation of allocations) {
+      const balance = await ensureEmployeeBalanceForPeriod(client, {
+        employeeId: req.user.id,
+        leaveTypeId: leaveType.id,
+        totalDays: leaveType.total_days,
+        year: allocation.year,
+        month: allocation.month,
+      });
+
+      if (!balance) {
+        await client.query("ROLLBACK");
+        transactionStarted = false;
+        return res.status(400).json({ message: "Leave balance could not be created." });
+      }
+
+      if (Number(balance.remaining_days) < allocation.numberOfDays) {
+        await client.query("ROLLBACK");
+        transactionStarted = false;
+        return res.status(400).json({
+          message: `Insufficient leave balance for ${allocation.month ? `month ${allocation.month}` : allocation.year}. ${balance.remaining_days} day(s) remain.`,
+        });
+      }
+
+      balances.push({ balanceId: balance.id, numberOfDays: allocation.numberOfDays });
+    }
+
+    const result = await client.query(
       `
-      WITH new_leave AS (
       INSERT INTO leave_requests
       (
         employee_id,
@@ -136,22 +210,6 @@ async function applyLeave(req, res) {
       VALUES
       ($1, $2, $3, $4, $5, $6, 'PENDING')
       RETURNING *
-      ), notification_rows AS (
-        INSERT INTO notifications
-        (recipient_id, leave_request_id, type, title, message, link)
-        SELECT
-          users.id,
-          new_leave.id,
-          'LEAVE_SUBMITTED',
-          'New leave request',
-          'A new leave request is waiting for your review.',
-          '/admin/requests'
-        FROM users
-        CROSS JOIN new_leave
-        WHERE users.role = 'ADMIN'
-        RETURNING id
-      )
-      SELECT * FROM new_leave
       `,
       [
         req.user.id,
@@ -163,16 +221,48 @@ async function applyLeave(req, res) {
       ]
     );
 
+    for (const allocation of balances) {
+      await client.query(
+        `
+        INSERT INTO leave_request_balance_allocations
+          (leave_request_id, leave_balance_id, number_of_days)
+        VALUES ($1, $2, $3)
+        `,
+        [result.rows[0].id, allocation.balanceId, allocation.numberOfDays]
+      );
+    }
+
+    await client.query(
+      `
+      INSERT INTO notifications
+        (recipient_id, leave_request_id, type, title, message, link)
+      SELECT
+        id, $1, 'LEAVE_SUBMITTED', 'New leave request',
+        'A new leave request is waiting for your review.', '/admin/requests'
+      FROM users
+      WHERE role = 'ADMIN'
+      `,
+      [result.rows[0].id]
+    );
+
+    await client.query("COMMIT");
+    transactionStarted = false;
+
     res.status(201).json({
       message: "Leave request submitted",
       leave: result.rows[0],
     });
   } catch (error) {
+    if (transactionStarted) {
+      await client.query("ROLLBACK");
+    }
     console.error(error);
 
     res.status(500).json({
       message: "Failed to apply leave",
     });
+  } finally {
+    client.release();
   }
 }
 
@@ -251,6 +341,7 @@ async function getAllLeaves(req, res) {
 // Admin: approve / reject
 async function updateLeaveStatus(req, res) {
   const client = await pool.connect();
+  let transactionStarted = false;
 
   try {
     const { status } = req.body;
@@ -266,6 +357,7 @@ async function updateLeaveStatus(req, res) {
     }
 
     await client.query("BEGIN");
+    transactionStarted = true;
 
     const leaveResult = await client.query(
       `
@@ -281,6 +373,7 @@ async function updateLeaveStatus(req, res) {
 
     if (!leave) {
       await client.query("ROLLBACK");
+      transactionStarted = false;
 
       return res.status(404).json({
         message: "Leave request not found",
@@ -289,30 +382,106 @@ async function updateLeaveStatus(req, res) {
 
     if (leave.status !== "PENDING") {
       await client.query("ROLLBACK");
+      transactionStarted = false;
 
       return res.status(400).json({
         message: "Leave request already processed",
       });
     }
 
+    let periodBalances = [];
     if (status === "APPROVED") {
-      const balanceResult = await client.query(
+      let allocationResult = await client.query(
         `
-        SELECT remaining_days
-        FROM leave_balances
-        WHERE employee_id = $1 AND leave_type_id = $2
-        FOR UPDATE
+        SELECT
+          lb.id,
+          lb.remaining_days,
+          allocation.number_of_days,
+          lb.period_year,
+          lb.period_month
+        FROM leave_request_balance_allocations allocation
+        JOIN leave_balances lb ON lb.id = allocation.leave_balance_id
+        WHERE allocation.leave_request_id = $1
+        ORDER BY lb.period_year, COALESCE(lb.period_month, 0)
+        FOR UPDATE OF lb
         `,
-        [leave.employee_id, leave.leave_type_id]
+        [leave.id]
       );
 
+      // Backfill allocations for pending requests created before period tracking.
+      if (allocationResult.rowCount === 0) {
+        const typeResult = await client.query(
+          "SELECT total_days, reset_period FROM leave_types WHERE id = $1",
+          [leave.leave_type_id]
+        );
+        const leaveType = typeResult.rows[0];
+        const startDate = leave.start_date.toISOString
+          ? leave.start_date.toISOString().slice(0, 10)
+          : String(leave.start_date).slice(0, 10);
+        const endDate = leave.end_date.toISOString
+          ? leave.end_date.toISOString().slice(0, 10)
+          : String(leave.end_date).slice(0, 10);
+        const periods = leaveType
+          ? allocateDaysByPeriod(startDate, endDate, leaveType.reset_period)
+          : null;
+
+        if (!periods) {
+          await client.query("ROLLBACK");
+          transactionStarted = false;
+          return res.status(400).json({ message: "Unable to calculate this request's leave period." });
+        }
+
+        for (const period of periods) {
+          const balance = await ensureEmployeeBalanceForPeriod(client, {
+            employeeId: leave.employee_id,
+            leaveTypeId: leave.leave_type_id,
+            totalDays: leaveType.total_days,
+            year: period.year,
+            month: period.month,
+          });
+          if (!balance) {
+            await client.query("ROLLBACK");
+            transactionStarted = false;
+            return res.status(400).json({ message: "Leave balance could not be created." });
+          }
+
+          await client.query(
+            `
+            INSERT INTO leave_request_balance_allocations
+              (leave_request_id, leave_balance_id, number_of_days)
+            VALUES ($1, $2, $3)
+            `,
+            [leave.id, balance.id, period.numberOfDays]
+          );
+        }
+
+        allocationResult = await client.query(
+          `
+          SELECT lb.id, lb.remaining_days, allocation.number_of_days,
+                 lb.period_year, lb.period_month
+          FROM leave_request_balance_allocations allocation
+          JOIN leave_balances lb ON lb.id = allocation.leave_balance_id
+          WHERE allocation.leave_request_id = $1
+          ORDER BY lb.period_year, COALESCE(lb.period_month, 0)
+          FOR UPDATE OF lb
+          `,
+          [leave.id]
+        );
+      }
+
+      periodBalances = allocationResult.rows;
+      const allocatedDays = periodBalances.reduce(
+        (sum, row) => sum + Number(row.number_of_days),
+        0
+      );
       if (
-        !balanceResult.rows[0] ||
-        Number(balanceResult.rows[0].remaining_days) < Number(leave.number_of_days)
+        allocatedDays !== Number(leave.number_of_days) ||
+        periodBalances.some((row) => Number(row.remaining_days) < Number(row.number_of_days))
       ) {
         await client.query("ROLLBACK");
+        transactionStarted = false;
         return res.status(400).json({
-          message: "This request exceeds the employee's remaining leave balance.",
+          message: "This request exceeds the employee's remaining leave balance for one or more periods.",
         });
       }
     }
@@ -329,23 +498,18 @@ async function updateLeaveStatus(req, res) {
       [status, req.user.id, leaveId]
     );
 
-    // Reduce balance only when approved
     if (status === "APPROVED") {
-      await client.query(
-        `
-        UPDATE leave_balances
-        SET
-          used_days = used_days + $1,
-          remaining_days = remaining_days - $1
-        WHERE employee_id = $2
-        AND leave_type_id = $3
-        `,
-        [
-          leave.number_of_days,
-          leave.employee_id,
-          leave.leave_type_id,
-        ]
-      );
+      for (const allocation of periodBalances) {
+        await client.query(
+          `
+          UPDATE leave_balances
+          SET used_days = used_days + $1,
+              remaining_days = remaining_days - $1
+          WHERE id = $2
+          `,
+          [allocation.number_of_days, allocation.id]
+        );
+      }
     }
 
     await client.query(
@@ -363,6 +527,7 @@ async function updateLeaveStatus(req, res) {
     );
 
     await client.query("COMMIT");
+    transactionStarted = false;
 
     res.json({
       message:
@@ -371,7 +536,9 @@ async function updateLeaveStatus(req, res) {
           : "Leave rejected",
     });
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (transactionStarted) {
+      await client.query("ROLLBACK");
+    }
 
     console.error(error);
 
@@ -387,6 +554,7 @@ async function updateLeaveStatus(req, res) {
 // Employee balance
 async function getMyBalance(req, res) {
   try {
+    await ensureCurrentEmployeeBalances(pool, req.user.id);
     const result = await pool.query(
       `
       SELECT
@@ -394,7 +562,10 @@ async function getMyBalance(req, res) {
         lt.name,
         lb.total_days,
         lb.used_days,
-        lb.remaining_days
+        lb.remaining_days,
+        lb.period_year,
+        lb.period_month,
+        lt.reset_period
       FROM leave_balances lb
 
       JOIN leave_types lt
@@ -402,13 +573,44 @@ async function getMyBalance(req, res) {
 
       WHERE lb.employee_id = $1
       AND lt.is_active = TRUE
+      AND lb.period_year = EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER
+      AND lb.period_month IS NOT DISTINCT FROM CASE
+        WHEN lt.reset_period = 'MONTHLY' THEN EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER
+        ELSE NULL
+      END
 
       ORDER BY lt.id
       `,
       [req.user.id]
     );
 
-    res.json({ balances: result.rows });
+    const history = await pool.query(
+      `
+      SELECT
+        lb.id,
+        lt.name,
+        lb.total_days,
+        lb.used_days,
+        lb.remaining_days,
+        lb.period_year,
+        lb.period_month,
+        lt.reset_period
+      FROM leave_balances lb
+      JOIN leave_types lt ON lt.id = lb.leave_type_id
+      WHERE lb.employee_id = $1
+        AND NOT (
+          lb.period_year = EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER
+          AND lb.period_month IS NOT DISTINCT FROM CASE
+            WHEN lt.reset_period = 'MONTHLY' THEN EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER
+            ELSE NULL
+          END
+        )
+      ORDER BY lb.period_year DESC, lb.period_month DESC NULLS LAST, lt.id
+      `,
+      [req.user.id]
+    );
+
+    res.json({ balances: result.rows, history: history.rows });
   } catch (error) {
     console.error(error);
 

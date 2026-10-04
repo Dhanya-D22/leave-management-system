@@ -1,9 +1,11 @@
 const pool = require("../config/database");
+const { ensureCurrentEmployeeBalances } = require("../services/leaveBalanceService");
 
 
 // Employee dashboard
 async function employeeDashboard(req, res) {
   try {
+    await ensureCurrentEmployeeBalances(pool, req.user.id);
     const balances = await pool.query(
       `
       SELECT
@@ -12,7 +14,10 @@ async function employeeDashboard(req, res) {
         lt.name,
         lb.total_days,
         lb.used_days,
-        lb.remaining_days
+        lb.remaining_days,
+        lb.period_year,
+        lb.period_month,
+        lt.reset_period
       FROM leave_balances lb
 
       JOIN leave_types lt
@@ -20,6 +25,11 @@ async function employeeDashboard(req, res) {
 
       WHERE lb.employee_id = $1
       AND lt.is_active = TRUE
+      AND lb.period_year = EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER
+      AND lb.period_month IS NOT DISTINCT FROM CASE
+        WHEN lt.reset_period = 'MONTHLY' THEN EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER
+        ELSE NULL
+      END
 
       ORDER BY lt.id
       `,

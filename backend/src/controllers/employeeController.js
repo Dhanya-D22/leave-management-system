@@ -64,8 +64,11 @@ async function createEmployee(req, res) {
     await client.query(
       `
       INSERT INTO leave_balances
-        (employee_id, leave_type_id, total_days, used_days, remaining_days)
+        (employee_id, leave_type_id, total_days, used_days, remaining_days, period_year, period_month)
       SELECT $1, id, total_days, 0, total_days
+        , EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER,
+        CASE WHEN reset_period = 'MONTHLY'
+          THEN EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER ELSE NULL END
       FROM leave_types
       WHERE is_active = TRUE
       `,

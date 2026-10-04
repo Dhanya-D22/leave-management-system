@@ -23,19 +23,32 @@ function ApplyLeave() {
   );
 
   useEffect(() => {
-    fetchLeaveTypes();
-  }, []);
-
-  const fetchLeaveTypes = async () => {
-    try {
-      const response = await api.get("/leaves/types");
-      const types = response.data?.leaveTypes;
-      setLeaveTypes(Array.isArray(types) ? types : []);
-    } catch (error) {
-      console.error(error);
-      setError("Unable to load leave types. Please refresh and try again.");
+    let isCurrent = true;
+    const params = {};
+    if (form.start_date && form.end_date) {
+      params.start_date = form.start_date;
+      params.end_date = form.end_date;
     }
-  };
+
+    api
+      .get("/leaves/types", { params })
+      .then((response) => {
+        if (isCurrent) {
+          const types = response.data?.leaveTypes;
+          setLeaveTypes(Array.isArray(types) ? types : []);
+        }
+      })
+      .catch((requestError) => {
+        console.error(requestError);
+        if (isCurrent) {
+          setError("Unable to load leave types. Please refresh and try again.");
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [form.start_date, form.end_date]);
 
   const handleChange = (e) => {
     setForm({
@@ -166,14 +179,13 @@ function ApplyLeave() {
 
                 {leaveTypes.map((type) => (
                   <option key={type.id} value={type.id}>
-                    {type.name} ({type.remaining_days} available of {type.total_days})
+                    {type.name} ({type.remaining_days} available)
                   </option>
                 ))}
               </select>
               {selectedLeaveType && (
                 <small className="leave-type-availability">
-                  {selectedLeaveType.remaining_days} days available out of {selectedLeaveType.total_days} annual days.
-                  Pending requests count toward the available balance.
+                  {selectedLeaveType.remaining_days} days available for {selectedLeaveType.balance_period_label} from the {selectedLeaveType.total_days}-day allocation. Pending applications do not deduct days; the balance updates after approval.
                 </small>
               )}
             </div>

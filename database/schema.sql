@@ -28,11 +28,16 @@ CREATE TABLE IF NOT EXISTS leave_types (
     name VARCHAR(80) UNIQUE NOT NULL,
     total_days INTEGER NOT NULL,
     description TEXT,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    reset_period VARCHAR(10) NOT NULL DEFAULT 'YEARLY'
+        CHECK (reset_period IN ('YEARLY', 'MONTHLY'))
 );
 
 ALTER TABLE leave_types
     ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE leave_types
+    ADD COLUMN IF NOT EXISTS reset_period VARCHAR(10) NOT NULL DEFAULT 'YEARLY';
 
 
 CREATE TABLE IF NOT EXISTS leave_requests (
@@ -107,8 +112,47 @@ CREATE TABLE IF NOT EXISTS leave_balances (
     used_days INTEGER NOT NULL DEFAULT 0,
 
     remaining_days INTEGER NOT NULL DEFAULT 0,
+    period_year INTEGER,
+    period_month INTEGER
+);
 
-    UNIQUE(employee_id, leave_type_id)
+ALTER TABLE leave_balances
+    ADD COLUMN IF NOT EXISTS period_year INTEGER;
+
+ALTER TABLE leave_balances
+    ADD COLUMN IF NOT EXISTS period_month INTEGER;
+
+UPDATE leave_balances lb
+SET period_year = EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER
+WHERE period_year IS NULL;
+
+UPDATE leave_balances lb
+SET period_month = EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER
+FROM leave_types lt
+WHERE lt.id = lb.leave_type_id
+  AND lt.reset_period = 'MONTHLY'
+  AND lb.period_month IS NULL;
+
+ALTER TABLE leave_balances
+    ALTER COLUMN period_year SET NOT NULL;
+
+ALTER TABLE leave_balances
+    DROP CONSTRAINT IF EXISTS leave_balances_employee_id_leave_type_id_key;
+
+CREATE UNIQUE INDEX IF NOT EXISTS leave_balances_period_unique_idx
+    ON leave_balances
+    (employee_id, leave_type_id, period_year, COALESCE(period_month, 0));
+
+CREATE TABLE IF NOT EXISTS leave_request_balance_allocations (
+    id SERIAL PRIMARY KEY,
+    leave_request_id INTEGER NOT NULL
+        REFERENCES leave_requests(id)
+        ON DELETE CASCADE,
+    leave_balance_id INTEGER NOT NULL
+        REFERENCES leave_balances(id)
+        ON DELETE RESTRICT,
+    number_of_days INTEGER NOT NULL CHECK (number_of_days > 0),
+    UNIQUE (leave_request_id, leave_balance_id)
 );
 
 
