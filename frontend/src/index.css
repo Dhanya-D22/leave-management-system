@@ -1689,6 +1689,35 @@ td strong {
   gap: 18px;
 }
 
+.employee-table {
+  min-width: 560px;
+}
+
+.employee-delete-button {
+  padding: 7px 12px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.employee-delete-button:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.employee-delete-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.empty-state-cell {
+  padding: 32px;
+  text-align: center;
+  color: #9ca3af;
+}
+
 .employee-form-card {
   margin-bottom: 22px;
   padding: 22px;

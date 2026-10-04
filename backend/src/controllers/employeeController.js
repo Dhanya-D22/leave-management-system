@@ -126,7 +126,77 @@ async function getEmployees(req, res) {
   }
 }
 
+async function deleteEmployee(req, res) {
+  const employeeId = Number(req.params.id);
+
+  if (!Number.isInteger(employeeId) || employeeId < 1) {
+    return res.status(400).json({
+      message: "Invalid employee ID",
+    });
+  }
+
+  const client = await pool.connect();
+  let transactionStarted = false;
+
+  try {
+    await client.query("BEGIN");
+    transactionStarted = true;
+
+    const employeeResult = await client.query(
+      `
+      SELECT id, name
+      FROM users
+      WHERE id = $1 AND role = 'EMPLOYEE'
+      FOR UPDATE
+      `,
+      [employeeId]
+    );
+
+    if (employeeResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      transactionStarted = false;
+      return res.status(404).json({
+        message: "Employee not found",
+      });
+    }
+
+    await client.query(
+      "DELETE FROM leave_requests WHERE employee_id = $1",
+      [employeeId]
+    );
+    await client.query(
+      "DELETE FROM users WHERE id = $1 AND role = 'EMPLOYEE'",
+      [employeeId]
+    );
+    await client.query("COMMIT");
+    transactionStarted = false;
+
+    return res.json({
+      message: "Employee deleted successfully",
+      employee: employeeResult.rows[0],
+    });
+  } catch (error) {
+    if (transactionStarted) {
+      await client.query("ROLLBACK");
+    }
+
+    if (error.code === "23503") {
+      return res.status(409).json({
+        message: "This employee is linked to records that prevent deletion",
+      });
+    }
+
+    console.error(error);
+    return res.status(500).json({
+      message: "Failed to delete employee",
+    });
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   createEmployee,
+  deleteEmployee,
   getEmployees,
 };

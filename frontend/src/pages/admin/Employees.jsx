@@ -9,6 +9,8 @@ function Employees() {
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -75,6 +77,35 @@ function Employees() {
     }
   };
 
+  const handleDelete = async (employee) => {
+    const confirmed = window.confirm(
+      `Delete ${employee.name} (${employee.email})? This will also delete their leave balances and leave requests. This cannot be undone.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleteError("");
+    setSuccessMessage("");
+    setDeletingId(employee.id);
+
+    try {
+      await api.delete(`/employees/${employee.id}`);
+      setEmployees((currentEmployees) =>
+        currentEmployees.filter((item) => item.id !== employee.id)
+      );
+      setSuccessMessage(`${employee.name} was deleted.`);
+    } catch (error) {
+      setDeleteError(
+        error.response?.data?.message ||
+          "Unable to delete employee. Please try again."
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   if (loading) {
     return <Loading />;
   }
@@ -102,6 +133,11 @@ function Employees() {
       {successMessage && (
         <div className="success-message" role="status">
           {successMessage}
+        </div>
+      )}
+      {deleteError && (
+        <div className="error-message" role="alert">
+          {deleteError}
         </div>
       )}
 
@@ -169,35 +205,53 @@ function Employees() {
         </form>
       )}
 
-      <div className="employee-grid">
+      <div className="table-card">
+        <div className="table-responsive">
+          <table className="employee-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Added</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
         {employees.length === 0 ? (
-          <div className="empty-state">
-            No employees found.
-          </div>
+          <tr>
+            <td className="empty-state-cell" colSpan="4">
+              No employees found.
+            </td>
+          </tr>
         ) : (
           employees.map((employee) => (
-            <div
-              className="employee-card"
-              key={employee.id}
-            >
-              <div className="employee-avatar">
-                {employee.name
-                  ?.charAt(0)
-                  .toUpperCase()}
-              </div>
-
-              <div>
-                <h3>{employee.name}</h3>
-
-                <p>{employee.email}</p>
-
-                <span className="employee-role">
-                  Employee
-                </span>
-              </div>
-            </div>
+            <tr key={employee.id}>
+              <td>
+                <strong>{employee.name}</strong>
+              </td>
+              <td>{employee.email}</td>
+              <td>
+                {employee.created_at
+                  ? new Date(employee.created_at).toLocaleDateString()
+                  : "—"}
+              </td>
+              <td>
+                <button
+                  className="employee-delete-button"
+                  type="button"
+                  onClick={() => handleDelete(employee)}
+                  disabled={deletingId === employee.id}
+                  aria-label={`Delete ${employee.name}`}
+                >
+                  {deletingId === employee.id ? "Deleting..." : "Delete"}
+                </button>
+              </td>
+            </tr>
           ))
         )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
