@@ -18,6 +18,10 @@ function ApplyLeave() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const selectedLeaveType = leaveTypes.find(
+    (type) => String(type.id) === String(form.leave_type_id)
+  );
+
   useEffect(() => {
     fetchLeaveTypes();
   }, []);
@@ -25,11 +29,7 @@ function ApplyLeave() {
   const fetchLeaveTypes = async () => {
     try {
       const response = await api.get("/leaves/types");
-      // The API currently returns the leave types directly as an array.
-      // Accept the wrapped form too in case the endpoint is updated later.
-      const types = Array.isArray(response.data)
-        ? response.data
-        : response.data?.leaveTypes;
+      const types = response.data?.leaveTypes;
       setLeaveTypes(Array.isArray(types) ? types : []);
     } catch (error) {
       console.error(error);
@@ -90,6 +90,16 @@ function ApplyLeave() {
 
     if (calculateDays() <= 0) {
       setError("End date cannot be before start date.");
+      return;
+    }
+
+    if (
+      selectedLeaveType &&
+      calculateDays() > Number(selectedLeaveType.remaining_days)
+    ) {
+      setError(
+        `Only ${selectedLeaveType.remaining_days} day(s) are available for ${selectedLeaveType.name}.`
+      );
       return;
     }
 
@@ -156,10 +166,16 @@ function ApplyLeave() {
 
                 {leaveTypes.map((type) => (
                   <option key={type.id} value={type.id}>
-                    {type.name} ({type.total_days} days)
+                    {type.name} ({type.remaining_days} available of {type.total_days})
                   </option>
                 ))}
               </select>
+              {selectedLeaveType && (
+                <small className="leave-type-availability">
+                  {selectedLeaveType.remaining_days} days available out of {selectedLeaveType.total_days} annual days.
+                  Pending requests count toward the available balance.
+                </small>
+              )}
             </div>
 
             <div className="form-group">

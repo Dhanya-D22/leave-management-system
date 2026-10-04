@@ -39,7 +39,7 @@ async function createEmployee(req, res) {
     transactionStarted = true;
 
     const leaveTypes = await client.query(
-      "SELECT id, total_days FROM leave_types"
+      "SELECT id, total_days FROM leave_types WHERE is_active = TRUE"
     );
 
     if (leaveTypes.rowCount === 0) {
@@ -67,6 +67,7 @@ async function createEmployee(req, res) {
         (employee_id, leave_type_id, total_days, used_days, remaining_days)
       SELECT $1, id, total_days, 0, total_days
       FROM leave_types
+      WHERE is_active = TRUE
       `,
       [employee.id]
     );

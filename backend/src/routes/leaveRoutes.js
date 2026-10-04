@@ -18,6 +18,7 @@ const {
 router.get(
   "/types",
   authMiddleware,
+  roleMiddleware("EMPLOYEE"),
   getLeaveTypes
 );
 

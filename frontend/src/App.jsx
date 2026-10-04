@@ -17,6 +17,7 @@ import LeaveBalance from "./pages/employee/LeaveBalance";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import LeaveRequests from "./pages/admin/LeaveRequests";
 import Employees from "./pages/admin/Employees";
+import LeaveTypes from "./pages/admin/LeaveTypes";
 
 function App() {
   return (
@@ -99,6 +100,17 @@ function App() {
               <ProtectedRoute allowedRoles={["ADMIN"]}>
                 <Layout>
                   <Employees />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/leave-types"
+            element={
+              <ProtectedRoute allowedRoles={["ADMIN"]}>
+                <Layout>
+                  <LeaveTypes />
                 </Layout>
               </ProtectedRoute>
             }

@@ -49,6 +49,11 @@ app.use(
   require("./routes/notificationRoutes")
 );
 
+app.use(
+  "/api/leave-types",
+  require("./routes/leaveTypeRoutes")
+);
+
 
 // 404
 app.use((req, res) => {

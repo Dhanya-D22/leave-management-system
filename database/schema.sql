@@ -27,8 +27,12 @@ CREATE TABLE IF NOT EXISTS leave_types (
     id SERIAL PRIMARY KEY,
     name VARCHAR(80) UNIQUE NOT NULL,
     total_days INTEGER NOT NULL,
-    description TEXT
+    description TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
+
+ALTER TABLE leave_types
+    ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
 
 
 CREATE TABLE IF NOT EXISTS leave_requests (

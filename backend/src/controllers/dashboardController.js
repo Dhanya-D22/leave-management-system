@@ -19,6 +19,7 @@ async function employeeDashboard(req, res) {
         ON lt.id = lb.leave_type_id
 
       WHERE lb.employee_id = $1
+      AND lt.is_active = TRUE
 
       ORDER BY lt.id
       `,

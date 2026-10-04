@@ -1,12 +1,18 @@
 const pool = require("../config/database");
 
 function calculateDays(startDate, endDate) {
-  const start = new Date(`${startDate}T00:00:00`);
-  const end = new Date(`${endDate}T00:00:00`);
+  if (
+    typeof startDate !== "string" ||
+    typeof endDate !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(startDate) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
+  ) {
+    return NaN;
+  }
 
-  const difference = end - start;
-
-  return Math.floor(difference / (1000 * 60 * 60 * 24)) + 1;
+  const start = Date.parse(`${startDate}T00:00:00Z`);
+  const end = Date.parse(`${endDate}T00:00:00Z`);
+  return Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
 }
 
 
@@ -14,10 +20,28 @@ function calculateDays(startDate, endDate) {
 async function getLeaveTypes(req, res) {
   try {
     const result = await pool.query(`
-      SELECT *
-      FROM leave_types
-      ORDER BY id
-    `);
+      SELECT
+        lt.id,
+        lt.name,
+        lt.total_days,
+        lt.description,
+        GREATEST(
+          COALESCE(lb.remaining_days, lt.total_days) - COALESCE((
+            SELECT SUM(lr.number_of_days)
+            FROM leave_requests lr
+            WHERE lr.employee_id = $1
+              AND lr.leave_type_id = lt.id
+              AND lr.status = 'PENDING'
+          ), 0),
+          0
+        ) AS remaining_days
+      FROM leave_types lt
+      LEFT JOIN leave_balances lb
+        ON lb.leave_type_id = lt.id
+        AND lb.employee_id = $1
+      WHERE lt.is_active = TRUE
+      ORDER BY lt.id
+    `, [req.user.id]);
 
     res.json({ leaveTypes: result.rows });
   } catch (error) {
@@ -56,7 +80,7 @@ async function applyLeave(req, res) {
       end_date
     );
 
-    if (numberOfDays <= 0) {
+    if (!Number.isInteger(numberOfDays) || numberOfDays <= 0) {
       return res.status(400).json({
         message: "Invalid dates",
       });
@@ -65,26 +89,34 @@ async function applyLeave(req, res) {
     // Check balance
     const balance = await pool.query(
       `
-      SELECT remaining_days
-      FROM leave_balances
-      WHERE employee_id = $1
-      AND leave_type_id = $2
+      SELECT
+        lb.remaining_days - COALESCE(SUM(lr.number_of_days), 0) AS available_days
+      FROM leave_types lt
+      JOIN leave_balances lb
+        ON lb.leave_type_id = lt.id
+        AND lb.employee_id = $1
+      LEFT JOIN leave_requests lr
+        ON lr.employee_id = lb.employee_id
+        AND lr.leave_type_id = lb.leave_type_id
+        AND lr.status = 'PENDING'
+      WHERE lt.id = $2 AND lt.is_active = TRUE
+      GROUP BY lb.remaining_days
       `,
       [req.user.id, leave_type_id]
     );
 
     if (!balance.rows[0]) {
       return res.status(400).json({
-        message: "Leave balance not found",
+        message: "This leave type is unavailable or has no balance configured.",
       });
     }
 
     if (
-      balance.rows[0].remaining_days <
+      Number(balance.rows[0].available_days) <
       numberOfDays
     ) {
       return res.status(400).json({
-        message: "Insufficient leave balance",
+        message: `Insufficient leave balance. You have ${Math.max(0, Number(balance.rows[0].available_days))} day(s) available, including pending requests.`,
       });
     }
 
@@ -263,6 +295,28 @@ async function updateLeaveStatus(req, res) {
       });
     }
 
+    if (status === "APPROVED") {
+      const balanceResult = await client.query(
+        `
+        SELECT remaining_days
+        FROM leave_balances
+        WHERE employee_id = $1 AND leave_type_id = $2
+        FOR UPDATE
+        `,
+        [leave.employee_id, leave.leave_type_id]
+      );
+
+      if (
+        !balanceResult.rows[0] ||
+        Number(balanceResult.rows[0].remaining_days) < Number(leave.number_of_days)
+      ) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          message: "This request exceeds the employee's remaining leave balance.",
+        });
+      }
+    }
+
     await client.query(
       `
       UPDATE leave_requests
@@ -347,6 +401,7 @@ async function getMyBalance(req, res) {
         ON lt.id = lb.leave_type_id
 
       WHERE lb.employee_id = $1
+      AND lt.is_active = TRUE
 
       ORDER BY lt.id
       `,

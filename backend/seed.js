@@ -82,6 +82,7 @@ async function seed() {
       CROSS JOIN leave_types lt
 
       WHERE u.email = 'employee@example.com'
+      AND lt.is_active = TRUE
 
       ON CONFLICT
       (employee_id, leave_type_id)

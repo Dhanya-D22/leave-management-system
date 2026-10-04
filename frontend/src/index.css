@@ -857,6 +857,78 @@ a {
   flex: 1;
 }
 
+.leave-type-availability {
+  display: block;
+  margin-top: 7px;
+  color: #7b728b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.leave-type-form {
+  margin-bottom: 20px;
+  border-color: #ece7f5;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgb(54 31 91 / 5%);
+}
+
+.leave-type-form-actions,
+.leave-type-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.leave-type-form-actions {
+  justify-content: flex-end;
+}
+
+.leave-type-actions .secondary-button,
+.leave-type-toggle {
+  padding: 8px 11px;
+  border-radius: 8px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.leave-type-toggle {
+  border: 1px solid #eee7ff;
+  background: #f8f5ff;
+  color: #6d28d9;
+}
+
+.leave-type-toggle:hover {
+  background: #eee7ff;
+}
+
+.leave-type-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.leave-type-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.leave-type-status.is-active {
+  color: #15803d;
+  background: #f0fdf4;
+}
+
+.leave-type-status.is-inactive {
+  color: #777b87;
+  background: #f3f4f6;
+}
+
 .sidebar-link-arrow {
   width: 7px;
   height: 7px;

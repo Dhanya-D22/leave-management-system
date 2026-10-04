@@ -71,7 +71,9 @@ function Sidebar({ mobileOpen, setMobileOpen }) {
     },
   ];
 
-  const links = user?.role === "ADMIN" ? adminLinks : employeeLinks;
+  const links = user?.role === "ADMIN"
+    ? [...adminLinks, { path: "/admin/leave-types", label: "Leave Types" }]
+    : employeeLinks;
   const iconByPath = {
     "/dashboard": "dashboard",
     "/apply-leave": "apply",
@@ -80,6 +82,7 @@ function Sidebar({ mobileOpen, setMobileOpen }) {
     "/admin/dashboard": "dashboard",
     "/admin/requests": "requests",
     "/admin/employees": "employees",
+    "/admin/leave-types": "balance",
   };
 
   return (
