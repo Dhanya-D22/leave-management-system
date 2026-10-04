@@ -9,6 +9,7 @@ function Navbar({ setMobileOpen }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -50,6 +51,7 @@ function Navbar({ setMobileOpen }) {
     }
 
     setNotificationsOpen(false);
+    setProfileMenuOpen(false);
     navigate(notification.link);
   };
 
@@ -121,25 +123,50 @@ function Navbar({ setMobileOpen }) {
           )}
         </div>
 
-        <div className="user-profile">
-          <div className="avatar">
-            {user?.name?.charAt(0).toUpperCase()}
-          </div>
+        <div className="user-menu">
+          <button
+            type="button"
+            className="user-profile user-profile-trigger"
+            aria-label={`Open profile menu for ${user?.name || "your account"}`}
+            aria-expanded={profileMenuOpen}
+            onClick={() => {
+              setProfileMenuOpen((open) => !open);
+              setNotificationsOpen(false);
+            }}
+          >
+            <span className="avatar" aria-hidden="true">
+              {user?.name?.charAt(0).toUpperCase()}
+            </span>
+            <span className="user-info">
+              <strong>{user?.name}</strong>
+              <small>{user?.role}</small>
+            </span>
+          </button>
 
-          <div className="user-info">
-            <strong>{user?.name}</strong>
-            <small>{user?.role}</small>
-          </div>
+          {profileMenuOpen && (
+            <div className="profile-menu" role="menu">
+              <div className="profile-menu-heading">
+                <strong>{user?.name}</strong>
+                <small>{user?.role}</small>
+              </div>
+              <button
+                type="button"
+                className="profile-logout-button"
+                role="menuitem"
+                onClick={() => {
+                  if (window.confirm("Are you sure you want to log out?")) {
+                    setProfileMenuOpen(false);
+                    logout();
+                    navigate("/login");
+                  }
+                }}
+              >
+                Log out
+              </button>
+            </div>
+          )}
         </div>
-
-        <button
-          className="logout-button"
-          onClick={logout}
-          title="Logout"
-        >
-          ↪
-        </button>
-      </div>
+</div>
     </header>
   );
 }

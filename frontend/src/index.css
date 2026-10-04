@@ -1108,10 +1108,80 @@ a {
   text-align: center;
 }
 
+.user-menu {
+  position: relative;
+}
+
 .user-profile {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.user-profile-trigger {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 24px;
+}
+
+.user-profile-trigger:focus-visible,
+.profile-logout-button:focus-visible {
+  outline: 3px solid #c4b5fd;
+  outline-offset: 3px;
+}
+
+.profile-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 220px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgb(17 24 39 / 14%);
+}
+
+.profile-menu-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 11px;
+  border-bottom: 1px solid #eeeef2;
+}
+
+.profile-menu-heading strong {
+  overflow: hidden;
+  color: #1f2937;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-menu-heading small {
+  color: #8b93a1;
+  font-size: 11px;
+}
+
+.profile-logout-button {
+  width: 100%;
+  margin-top: 5px;
+  padding: 10px 11px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #b42318;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-logout-button:hover {
+  background: #fef2f2;
 }
 
 .avatar {
@@ -1874,10 +1944,6 @@ td strong {
     gap: 8px;
   }
 
-  .logout-button {
-    width: 32px;
-    height: 32px;
-  }
 
   .filter-tabs {
     overflow-x: auto;
