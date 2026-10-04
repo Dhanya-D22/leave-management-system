@@ -152,11 +152,11 @@ async function requestPasswordReset(req, res) {
     await transporter.sendMail({
       from: process.env.MAIL_FROM,
       to: user.email,
-      subject: "Reset your LeaveFlow password",
+      subject: "Reset your LeaveTrack password",
       text: `Hello ${user.name},\n\nUse this link to reset your password within ${RESET_TOKEN_TTL_MINUTES} minutes:\n${resetUrl}\n\nIf you did not request this, you can ignore this email.`,
       html: `
         <p>Hello ${escapeHtml(user.name)},</p>
-        <p>Use the link below to reset your LeaveFlow password. It expires in ${RESET_TOKEN_TTL_MINUTES} minutes.</p>
+        <p>Use the link below to reset your LeaveTrack password. It expires in ${RESET_TOKEN_TTL_MINUTES} minutes.</p>
         <p><a href="${escapeHtml(resetUrl.toString())}">Reset password</a></p>
         <p>If you did not request this, you can ignore this email.</p>
       `,

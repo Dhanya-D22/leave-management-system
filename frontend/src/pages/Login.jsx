@@ -10,6 +10,7 @@ function Login() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [error, setError] = useState("");
 
@@ -61,7 +62,7 @@ function Login() {
             </svg>
           </div>
 
-          <h1>LeaveFlow</h1>
+          <h1>LeaveTrack</h1>
 
           <p>
             Simple, smart and efficient
@@ -73,9 +74,8 @@ function Login() {
         <div className="login-quote">
           <span aria-hidden="true">{"\u201C"}</span>
           <p>
-            Manage your team's time,
-            <br />
-            effortlessly.
+            Plan. Request. Approve. Done.
+            
           </p>
         </div>
       </div>
@@ -84,7 +84,7 @@ function Login() {
         <div className="login-form-box">
           <div className="mobile-login-logo">
             <div className="logo-icon">L</div>
-            <h2>LeaveFlow</h2>
+            <h2>LeaveTrack</h2>
           </div>
 
           <div className="login-heading">
@@ -123,14 +123,35 @@ function Login() {
                 </Link>
               </div>
 
-              <input
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) =>
-                  setPassword(e.target.value)
-                }
-              />
+              <div className="password-input-wrap">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  className="password-visibility-toggle"
+                  type="button"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  onClick={() => setShowPassword((visible) => !visible)}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    {showPassword ? (
+                      <>
+                        <path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8" />
+                        <path d="M9.9 5.2A10.8 10.8 0 0112 5c5 0 8.7 4.2 10 7-.4.9-1.2 2-2.4 3.1M6.2 6.2C3.9 7.8 2.5 10 2 12c1.3 2.8 5 7 10 7 1 0 2-.2 2.9-.5" />
+                      </>
+                    ) : (
+                      <>
+                        <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </>
+                    )}
+                  </svg>
+                </button>
+              </div>
             </div>
 
             <button
@@ -156,6 +177,7 @@ function Login() {
 
             <small>Password: Password@123</small>
           </div>
+          
         </div>
       </div>
     </div>

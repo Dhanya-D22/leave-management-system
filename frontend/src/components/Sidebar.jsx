@@ -105,7 +105,7 @@ function Sidebar({ mobileOpen, setMobileOpen }) {
           <div className="logo-icon" aria-hidden="true"><span>L</span><i></i></div>
 
           <div>
-            <h2>LeaveFlow</h2>
+            <h2>LeaveTrack</h2>
             <span>Management System</span>
           </div>
         </div>
@@ -165,7 +165,7 @@ function Sidebar({ mobileOpen, setMobileOpen }) {
                     <path d="M12 3v4M8 12h.01M16 12h.01M9 16h6" />
                   </svg>
                 </span>
-                <span><strong>LeaveFlow Assistant</strong><small>Here to help</small></span>
+                <span><strong>LeaveTrack Assistant</strong><small>Here to help</small></span>
                 <span className="assistant-status-dot" aria-label="Available" />
               </div>
               <div className="assistant-chat-preview">

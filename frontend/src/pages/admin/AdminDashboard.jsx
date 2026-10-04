@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import api from "../../services/api";
 import Loading from "../../components/Loading";
 import StatusBadge from "../../components/StatusBadge";
@@ -8,20 +8,20 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const response = await api.get("/dashboard/admin");
+
+        setData(response.data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchDashboard();
   }, []);
-
-  const fetchDashboard = async () => {
-    try {
-      const response = await api.get("/dashboard/admin");
-
-      setData(response.data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return <Loading />;
@@ -32,7 +32,7 @@ function AdminDashboard() {
       <div className="page-header">
         <div>
           <h2>Admin Dashboard</h2>
-          <p>Overview of your organization's leave activity.</p>
+          <p>Overview of organization's leave activity.</p>
         </div>
 
         <a
@@ -45,7 +45,12 @@ function AdminDashboard() {
 
       <div className="stats-grid admin-stats">
         <div className="stat-card">
-          <div className="stat-icon purple">♙</div>
+          <div className="stat-icon purple" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="9" cy="8" r="3.5" />
+              <path d="M2.5 20v-1.5A4.5 4.5 0 0 1 7 14h4a4.5 4.5 0 0 1 4.5 4.5V20M16 4.8a3.5 3.5 0 0 1 0 6.4M17 14h.5a4 4 0 0 1 4 4v2" />
+            </svg>
+          </div>
 
           <div>
             <span>Total Employees</span>
@@ -55,7 +60,12 @@ function AdminDashboard() {
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon orange">◷</div>
+          <div className="stat-icon orange" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+          </div>
 
           <div>
             <span>Pending</span>
@@ -65,7 +75,12 @@ function AdminDashboard() {
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon green">✓</div>
+          <div className="stat-icon green" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="m8 12 2.5 2.5L16.5 9" />
+            </svg>
+          </div>
 
           <div>
             <span>Approved</span>
@@ -75,7 +90,12 @@ function AdminDashboard() {
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon red">×</div>
+          <div className="stat-icon red" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="m9 9 6 6m0-6-6 6" />
+            </svg>
+          </div>
 
           <div>
             <span>Rejected</span>
