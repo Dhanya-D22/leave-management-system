@@ -187,6 +187,46 @@ a {
   font-size: 13px;
 }
 
+.forgot-password:hover,
+.auth-back-link:hover {
+  text-decoration: underline;
+}
+
+.password-reset-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: linear-gradient(145deg, #f5f3ff, #f8f7fc 55%, #ffffff);
+}
+
+.password-reset-card {
+  width: 100%;
+  max-width: 460px;
+  padding: 36px;
+  background: white;
+  border: 1px solid #eeeef2;
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(31, 41, 55, 0.08);
+}
+
+.password-reset-card .login-heading {
+  margin-bottom: 24px;
+}
+
+.password-reset-card .login-heading h2 {
+  font-size: 28px;
+}
+
+.auth-back-link {
+  display: inline-block;
+  margin-top: 22px;
+  color: #7c3aed;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .form-group input,
 .form-group select,
 .form-group textarea {

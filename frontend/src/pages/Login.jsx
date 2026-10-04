@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 function Login() {
@@ -112,9 +113,9 @@ function Login() {
               <div className="label-row">
                 <label>Password</label>
 
-                <span className="forgot-password">
+                <Link className="forgot-password" to="/forgot-password">
                   Forgot password?
-                </span>
+                </Link>
               </div>
 
               <input
