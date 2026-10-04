@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -29,6 +30,7 @@ function SidebarIcon({ name }) {
 
 function Sidebar({ mobileOpen, setMobileOpen }) {
   const { user } = useAuth();
+  const [assistantOpen, setAssistantOpen] = useState(false);
 
   const employeeLinks = [
     {
@@ -135,13 +137,53 @@ function Sidebar({ mobileOpen, setMobileOpen }) {
 
         <div className="sidebar-bottom">
           <div className="sidebar-help">
-            <div className="help-icon">?</div>
-
-            <div>
-              <strong>Need help?</strong>
-              <p>Contact your administrator</p>
-            </div>
-          </div>
+            <button
+              type="button"
+              className={`sidebar-help-trigger ${assistantOpen ? "is-open" : ""}`}
+              onClick={() => setAssistantOpen((open) => !open)}
+              aria-expanded={assistantOpen}
+              aria-controls="sidebar-assistant-panel"
+            >
+              <span className="assistant-robot-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="4" y="7" width="16" height="13" rx="4" />
+                  <path d="M12 3v4M8 12h.01M16 12h.01M9 16h6M2 12h2M20 12h2" />
+                </svg>
+              </span>
+              <span className="assistant-trigger-copy">
+                <strong>Need help?</strong>
+                <small>Ask the leave assistant</small>
+              </span>
+              <span className="assistant-trigger-chevron" aria-hidden="true">{assistantOpen ? "−" : "+"}</span>
+            </button>
+          {assistantOpen && (
+            <section className="sidebar-assistant-panel" id="sidebar-assistant-panel" aria-label="Leave assistant preview">
+              <div className="assistant-panel-heading">
+                <span className="assistant-panel-avatar" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="4" y="7" width="16" height="13" rx="4" />
+                    <path d="M12 3v4M8 12h.01M16 12h.01M9 16h6" />
+                  </svg>
+                </span>
+                <span><strong>LeaveFlow Assistant</strong><small>Here to help</small></span>
+                <span className="assistant-status-dot" aria-label="Available" />
+              </div>
+              <div className="assistant-chat-preview">
+                <p className="assistant-message">Hi{user?.name ? `, ${user.name.split(" ")[0]}` : ""}! How can I help with your leave?</p>
+                <span className="assistant-time">Just now</span>
+                <p className="assistant-preview-hint">Chat preview · Responses are not enabled yet</p>
+              </div>
+              <div className="assistant-suggestions" aria-label="Sample questions">
+                <span>Check leave balance</span>
+                <span>How do I apply?</span>
+              </div>
+              <div className="assistant-input-preview">
+                <span>Type your message…</span>
+                <button type="button" aria-label="Send message" disabled>↑</button>
+              </div>
+            </section>
+          )}
+        </div>
         </div>
       </aside>
     </>
