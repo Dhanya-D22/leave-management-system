@@ -54,7 +54,12 @@ function Login() {
         <div className="decoration-circle circle-two"></div>
 
         <div className="login-brand">
-          <div className="large-logo">L</div>
+          <div className="large-logo" aria-hidden="true">
+            <svg viewBox="0 0 32 32" focusable="false">
+              <rect x="5" y="7" width="22" height="20" rx="4" />
+              <path d="M10 4v6M22 4v6M5 13h22M11 20l3 3 7-7" />
+            </svg>
+          </div>
 
           <h1>LeaveFlow</h1>
 
@@ -66,7 +71,7 @@ function Login() {
         </div>
 
         <div className="login-quote">
-          <span>“</span>
+          <span aria-hidden="true">{"\u201C"}</span>
           <p>
             Manage your team's time,
             <br />
